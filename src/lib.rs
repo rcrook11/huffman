@@ -1,7 +1,7 @@
-use std::error::Error as Err;
-
 mod config;
 mod huffman_utils;
+
+use std::error::Error as Err;
 
 pub use config::Config;
 pub use huffman_utils::{huff, puff};
