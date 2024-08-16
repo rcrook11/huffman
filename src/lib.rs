@@ -2,9 +2,8 @@ use std::{
     collections::HashMap,
     error::Error as Err,
     fs::File,
-    io::{BufReader, Read, BufWriter, Write}
+    io::{ BufReader, Read, BufWriter, Write, Seek }
 };
-use std::io::Seek;
 use bit_vec::BitVec;
 
 pub fn run(config: Config) -> Result<(), Box<dyn Err>> {
@@ -186,7 +185,6 @@ struct HuffNode {
     right: Option<Box<HuffNode>>,
 }
 
-#[derive(Debug)]
 struct HuffCode {
     byte: u8,
     code: usize,
