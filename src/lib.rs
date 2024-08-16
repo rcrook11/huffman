@@ -4,8 +4,12 @@
 //!
 //! ## Usage
 //!
+//! ```rust
 //! huffman::huff("path/to/file");
-//! husffman::puff("path/to/file.huff");
+//!
+//! huffman::puff("path/to/file.huff");
+//!
+//! ```
 
 /// Configuration module for the huffman cli tool
 mod config;
