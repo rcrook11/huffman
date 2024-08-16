@@ -141,17 +141,17 @@ struct HuffKey {
     byte_frequency: HashMap<u8, u64>,
 }
 
+struct HuffCode {
+    byte: u8,
+    code: usize,
+    length: usize,
+}
+
 struct HuffNode {
     code: Box<HuffCode>,
     frequency: u64,
     left: Option<Box<HuffNode>>,
     right: Option<Box<HuffNode>>,
-}
-
-struct HuffCode {
-    byte: u8,
-    code: usize,
-    length: usize,
 }
 
 impl HuffNode {
