@@ -29,14 +29,14 @@ pub fn huff(file_path: &str) -> Result<(), Box<dyn Err>> {
 }
 
 pub fn puff(file_path: &str) -> Result<(), Box<dyn Err>> {
-    let byte_codes = read_huff_key(file_path.to_owned())?;
+    let key = read_huff_key(file_path.to_owned())?;
 
-    let mut root = HuffNode::build_huff_tree(&byte_codes.byte_codes);
+    let mut root = HuffNode::build_huff_tree(&key.byte_frequency);
     root.update_codes(&0,&0);
 
     let root = Box::new(root);
 
-    huff_decode(root, file_path, &byte_codes)?;
+    huff_decode(root, file_path, &key)?;
     Ok(())
 }
 
@@ -95,15 +95,15 @@ fn huff_decode(root: Box<HuffNode>, file_path: &str, key: &HuffKey) -> Result<()
     Ok(())
 }
 
-fn write_huff_key(byte_codes: HashMap<u8, u64>, f: &mut BufWriter<File>, huff_len: u64) -> Result<(), Box<dyn Err>> {
-    let key_len: u16 = byte_codes.len() as u16 * 9u16 + 10;
+fn write_huff_key(byte_frequencies: HashMap<u8, u64>, f: &mut BufWriter<File>, huff_len: u64) -> Result<(), Box<dyn Err>> {
+    let key_len: u16 = byte_frequencies.len() as u16 * 9u16 + 10;
     let key_len_bytes = key_len.to_be_bytes();
     let huff_len_bytes = huff_len.to_be_bytes();
 
     f.write(&key_len_bytes)?;
     f.write(&huff_len_bytes)?;
 
-    for (byte, freq) in byte_codes {
+    for (byte, freq) in byte_frequencies {
         f.write(&[byte])?;
         f.write(&freq.to_be_bytes())?;
     }
@@ -139,7 +139,7 @@ fn read_huff_key(file_path: String) -> Result<HuffKey, Box<dyn Err>> {
     Ok(HuffKey {
         key_len,
         huff_len,
-        byte_codes: byte_frequency,
+        byte_frequency,
     })
 }
 
@@ -175,7 +175,7 @@ impl Config {
 struct HuffKey {
     key_len: u16,
     huff_len: u64,
-    byte_codes: HashMap<u8, u64>,
+    byte_frequency: HashMap<u8, u64>,
 }
 
 struct HuffNode {
