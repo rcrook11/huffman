@@ -1,3 +1,4 @@
+//! A module that provides functions for compressing and decompressing files using the Huffman coding algorithm.
 use std::{
     collections::HashMap,
     error::Error as Err,
@@ -6,6 +7,15 @@ use std::{
 };
 use bit_vec::BitVec;
 
+/// Compresses a file using the Huffman coding algorithm.
+///
+/// # Arguments
+///
+/// * `file_path` - A string slice that holds the path to the file to be compressed.
+///
+/// # Errors
+///
+/// Returns an error if the file cannot be opened, read, or written to.
 pub fn huff(file_path: &str) -> Result<(), Box<dyn Err>> {
     let byte_frequency = count_byte_frequency(file_path)?;
 
@@ -20,6 +30,15 @@ pub fn huff(file_path: &str) -> Result<(), Box<dyn Err>> {
     Ok(())
 }
 
+/// Decompresses a file that was compressed using the Huffman coding algorithm.
+///
+/// # Arguments
+///
+/// * `file_path` - A string slice that holds the path to the file to be decompressed.
+///
+/// # Errors
+///
+/// Returns an error if the file cannot be opened, read, or written to.
 pub fn puff(file_path: &str) -> Result<(), Box<dyn Err>> {
     let key = read_huff_key(file_path.to_owned())?;
 
@@ -32,6 +51,15 @@ pub fn puff(file_path: &str) -> Result<(), Box<dyn Err>> {
     Ok(())
 }
 
+/// Counts the frequency of each byte in a file.
+///
+/// # Arguments
+///
+/// * `file_path` - A string slice that holds the path to the file to be analyzed.
+///
+/// # Errors
+///
+/// Returns an error if the file cannot be opened or read.
 fn count_byte_frequency(file_path: &str) -> Result<HashMap<u8, u64>, Box<dyn Err>> {
     let f = BufReader::new(File::open(file_path)?).bytes();
 
@@ -45,7 +73,21 @@ fn count_byte_frequency(file_path: &str) -> Result<HashMap<u8, u64>, Box<dyn Err
     Ok(byte_frequency)
 }
 
-
+/// Encodes a file using a Huffman codes generated from using the Huffman tree method
+///
+/// # Arguments
+///
+/// * `byte_codes` - A HashMap that maps a byte to it's Huffman code.
+///
+/// * `file_path` - A string slice that holds the path to the file to be encoded.
+///
+/// * `byte_frequency` - A HashMap that maps a byte to it's frequency in the file.
+///
+/// # Errors
+///
+/// Returns an error if the input file cannot be read.
+///
+/// Returns an error if the output file cannot be written to.
 fn huff_encode(byte_codes: HashMap<u8, Box<HuffCode>>, file_path: &str, byte_frequency: HashMap<u8, u64>) -> Result<u64, Box<dyn Err>> {
     let f = BufReader::new(File::open(file_path)?).bytes();
     let mut bit_vec = BitVec::new();
@@ -65,6 +107,23 @@ fn huff_encode(byte_codes: HashMap<u8, Box<HuffCode>>, file_path: &str, byte_fre
     Ok(bit_vec.len() as u64)
 }
 
+/// Decodes a file using the key that was generated when the file was compressed
+///
+/// # Arguments
+///
+/// * `root` - A Box that holds the re-constructed Huffman tree.
+///
+/// * `file_path` - A string slice that holds the path to the file to be decoded.
+///
+/// * `key` - A reference to the key that was generated when the file was compressed.
+///
+/// # Errors
+///
+/// Returns an error if the input file cannot be read.
+///
+/// Returns an error if the output file cannot be written to.
+///
+/// Returns an error if the key is invalid.
 fn huff_decode(root: Box<HuffNode>, file_path: &str, key: &HuffKey) -> Result<(), Box<dyn Err>> {
     let out_path = "out_".to_owned() + &*file_path.to_owned()
         .split(".huff")
@@ -87,6 +146,19 @@ fn huff_decode(root: Box<HuffNode>, file_path: &str, key: &HuffKey) -> Result<()
     Ok(())
 }
 
+/// Writes the Huffman key to beginning of the output file
+///
+/// # Arguments
+///
+/// * `byte_frequencies` - A HashMap that maps a byte to it's frequency in the file.
+///
+/// * `f` - A mutable reference to the output file.
+///
+/// * `huff_len` - The length of the encoded file in bits.
+///
+/// # Errors
+///
+/// Returns an error if the key cannot be written to the output file.
 fn write_huff_key(byte_frequencies: HashMap<u8, u64>, f: &mut BufWriter<File>, huff_len: u64) -> Result<(), Box<dyn Err>> {
     let key_len: u16 = byte_frequencies.len() as u16 * 9u16 + 10;
     let key_len_bytes = key_len.to_be_bytes();
@@ -103,6 +175,15 @@ fn write_huff_key(byte_frequencies: HashMap<u8, u64>, f: &mut BufWriter<File>, h
     Ok(())
 }
 
+/// Reads the Huffman key from the beginning of the compressed file
+///
+/// # Arguments
+///
+/// * `file_path` - A string slice that holds the path to the compressed file.
+///
+/// # Errors
+///
+/// Returns an error if the key cannot be read from the compressed file.
 fn read_huff_key(file_path: String) -> Result<HuffKey, Box<dyn Err>> {
     let mut f = BufReader::new(File::open(file_path)?);
     let mut byte_frequency = HashMap::new();
@@ -135,18 +216,63 @@ fn read_huff_key(file_path: String) -> Result<HuffKey, Box<dyn Err>> {
     })
 }
 
+/// A struct that holds the key that was generated when a file was compressed
+///
+/// # Fields
+///
+/// * `key_len` - The length of the key in bytes.
+///
+/// * `huff_len` - The length of the encoded file in bits.
+///
+/// * `byte_frequency` - A HashMap that maps a byte to it's frequency in the file.
 struct HuffKey {
     key_len: u16,
     huff_len: u64,
     byte_frequency: HashMap<u8, u64>,
 }
 
+/// A struct that holds the Huffman code for a byte
+///
+/// # Fields
+///
+/// * `byte` - The byte that the code represents.
+///
+/// * `code` - The Huffman code for the byte.
+///
+/// * `length` - The length of the Huffman code in bits
 struct HuffCode {
     byte: u8,
     code: usize,
     length: usize,
 }
 
+/// A struct that holds a node in a Huffman tree
+///
+/// # Fields
+///
+/// * `code` - The Huffman code for the byte, only relevant for leaf nodes.
+///
+/// * `frequency` - The frequency of the byte in the file, only relevant for leaf nodes.
+///
+/// * `left` - The left child of the node.
+///
+/// * `right` - The right child of the node.
+///
+/// # Methods
+///
+/// * `new` - Creates a new leaf node.
+///
+/// * `build_huff_tree` - Builds a Huffman tree from a HashMap that maps a byte to it's frequency.
+///
+/// * `is_leaf` - Returns true if the node is a leaf node.
+///
+/// * `combine` - Combines two nodes into a new node.
+///
+/// * `update_codes` - Updates the Huffman codes for all the leaf nodes in the tree.
+///
+/// * `gather_leaves` - Gathers all the leaf nodes in the tree.
+///
+/// * `search_tree` - Searches the tree for a byte using a BitVec.
 struct HuffNode {
     code: Box<HuffCode>,
     frequency: u64,
@@ -155,6 +281,19 @@ struct HuffNode {
 }
 
 impl HuffNode {
+    /// Creates a new leaf node.
+    ///
+    /// # Arguments
+    ///
+    /// * `byte` - The byte that the node represents.
+    ///
+    /// * `frequency` - The frequency of the byte in the file.
+    ///
+    /// * `code` - The Huffman code for the byte.
+    ///
+    /// # Returns
+    ///
+    /// A new leaf node.
     fn new(byte: u8, frequency: u64, code: usize) -> HuffNode {
         HuffNode {
             code: Box::new(HuffCode {
@@ -168,6 +307,15 @@ impl HuffNode {
         }
     }
 
+    /// Builds a Huffman tree from a HashMap that maps a byte to it's frequency.
+    ///
+    /// # Arguments
+    ///
+    /// * `byte_frequency` - A reference to a HashMap that maps a byte to it's frequency.
+    ///
+    /// # Returns
+    ///
+    /// The root node of the Huffman tree.
     fn build_huff_tree(byte_frequency: &HashMap<u8, u64>) -> HuffNode {
         let mut nodes = byte_frequency.iter()
             .map(|(byte, frequency)| HuffNode::new(*byte, *frequency, 0))
@@ -186,10 +334,27 @@ impl HuffNode {
         nodes.remove(0)
     }
 
+    /// Returns true if the node is a leaf node.
+    ///
+    /// # Returns
+    ///
+    /// True if the node is a leaf node, false otherwise.
     fn is_leaf(&self) -> bool {
         self.left.is_none() && self.right.is_none()
     }
 
+    /// Combines two nodes into a new node.
+    ///
+    /// # Arguments
+    ///
+    /// * `left` - The left child of the new node.
+    ///
+    /// * `right` - The right child of the new node.
+    ///
+    /// # Returns
+    ///
+    /// A new node that is the combination of the two input nodes with the 'byte' field set to the
+    /// smaller of the two input node bytes.
     fn combine(left: HuffNode, right: HuffNode) -> HuffNode {
         HuffNode {
             code: if &left.code.byte < &right.code.byte {
@@ -211,6 +376,15 @@ impl HuffNode {
         }
     }
 
+    /// Updates the Huffman codes for all the leaf nodes in the tree.
+    ///
+    /// # Arguments
+    ///
+    /// * `c` - The Huffman code for the node, should be 0 for the root node. Shifted by one for each
+    /// level of the tree and |'d with 1 for the right child.
+    ///
+    /// * `l` - The length of the Huffman code for the node, should be 0 for the root node. Incremented
+    /// by one for each level of the tree.
     fn update_codes(&mut self, c: &usize, l: &usize) {
         if self.is_leaf() {
             self.code.code = *c;
@@ -226,6 +400,11 @@ impl HuffNode {
         }
     }
 
+    /// Gathers all the leaf nodes in the tree.
+    ///
+    /// # Arguments
+    ///
+    /// * `leaves` - A mutable reference to a HashMap that maps a byte to it's Huffman code.
     fn gather_leaves(&self, leaves: &mut HashMap<u8, Box<HuffCode>>) {
         if self.is_leaf() {
             leaves.insert(self.code.byte, Box::new(HuffCode {
@@ -244,6 +423,18 @@ impl HuffNode {
         }
     }
 
+    /// Searches the tree for a byte using a BitVec. The BitVec should be the encoded file. The
+    /// function will return the byte that corresponds to the next Huffman code in the BitVec.
+    ///
+    /// # Arguments
+    ///
+    /// * `bit_vec` - A mutable reference to a BitVec that holds the encoded file.
+    ///
+    /// * `bits` - A mutable reference to the current bit in the BitVec.
+    ///
+    /// # Returns
+    ///
+    /// The byte that corresponds to the next Huffman code in the BitVec.
     fn search_tree(&self, bit_vec: &mut BitVec, bits: &mut usize) -> Option<u8> {
         if self.is_leaf() {
             return Some(self.code.byte);

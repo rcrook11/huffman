@@ -1,3 +1,12 @@
+//! Huffman coding implementation in Rust.
+//!
+//! `huffman` is a simple implementation of the Huffman coding algorithm in Rust.
+//!
+//! ## Usage
+//!
+//! huffman huff <file>
+//!
+//! huffman puff <file>
 use std::env;
 use huffman::Config;
 use huffman::run;
