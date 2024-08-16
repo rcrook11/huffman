@@ -24,7 +24,7 @@ pub fn huff(file_path: &str) -> Result<(), Box<dyn Err>> {
     let mut leaves = HashMap::new();
     root.gather_leaves(&mut leaves);
 
-    let huff_len = huff_encode(leaves, file_path, byte_frequency)?;
+    huff_encode(leaves, file_path, byte_frequency)?;
 
     Ok(())
 }
