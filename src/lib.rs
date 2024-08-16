@@ -4,6 +4,7 @@ use std::{
     fs::File,
     io::{BufReader, Read, BufWriter, Write}
 };
+use std::io::Seek;
 use bit_vec::BitVec;
 
 pub fn run(config: Config) -> Result<(), Box<dyn Err>> {
@@ -23,21 +24,20 @@ pub fn huff(file_path: &str) -> Result<(), Box<dyn Err>> {
     let mut leaves = HashMap::new();
     root.gather_leaves(&mut leaves);
 
-    huff_encode(leaves, file_path)?;
-    write_huff_key(byte_frequency, file_path)?;
+    let huff_len = huff_encode(leaves, file_path, byte_frequency)?;
 
     Ok(())
 }
 
 pub fn puff(file_path: &str) -> Result<(), Box<dyn Err>> {
-    let byte_codes = read_huff_key(file_path.to_owned() + "k")?;
+    let byte_codes = read_huff_key(file_path.to_owned())?;
 
-    let mut root = HuffNode::build_huff_tree(&byte_codes);
+    let mut root = HuffNode::build_huff_tree(&byte_codes.byte_codes);
     root.update_codes(&0,&0);
 
     let root = Box::new(root);
 
-    huff_decode(root, file_path)?;
+    huff_decode(root, file_path, &byte_codes)?;
     Ok(())
 }
 
@@ -55,7 +55,7 @@ fn count_byte_frequency(file_path: &str) -> Result<HashMap<u8, u64>, Box<dyn Err
 }
 
 
-fn huff_encode(byte_codes: HashMap<u8, Box<HuffCode>>, file_path: &str) -> Result<(), Box<dyn Err>> {
+fn huff_encode(byte_codes: HashMap<u8, Box<HuffCode>>, file_path: &str, byte_frequency: HashMap<u8, u64>) -> Result<u64, Box<dyn Err>> {
     let f = BufReader::new(File::open(file_path)?).bytes();
     let mut bit_vec = BitVec::new();
 
@@ -68,31 +68,41 @@ fn huff_encode(byte_codes: HashMap<u8, Box<HuffCode>>, file_path: &str) -> Resul
     }
 
     let mut f_out = BufWriter::new(File::create(file_path.to_owned() + ".huff")?);
+    write_huff_key(byte_frequency, &mut f_out, bit_vec.len() as u64)?;
     f_out.write(bit_vec.to_bytes().as_slice())?;
 
-    Ok(())
+    Ok(bit_vec.len() as u64)
 }
 
-fn huff_decode(root: Box<HuffNode>, file_path: &str) -> Result<(), Box<dyn Err>> {
+fn huff_decode(root: Box<HuffNode>, file_path: &str, key: &HuffKey) -> Result<(), Box<dyn Err>> {
     let out_path = "out_".to_owned() + &*file_path.to_owned()
         .split(".huff")
         .collect::<Vec<&str>>()[0];
 
-    let f = BufReader::new(File::open(file_path)?);
+    let mut f = BufReader::new(File::open(file_path)?);
+    f.seek(std::io::SeekFrom::Start(key.key_len as u64))?;
     let mut f_out = BufWriter::new(File::create(out_path)?);
 
     let mut bit_vec = BitVec::from_bytes(&mut f.bytes().collect::<Result<Vec<u8>, _>>()?);
     let mut bits: usize = 0;
 
     while let Some(byte) = root.as_ref().search_tree(&mut bit_vec, &mut bits) {
+        if bits > key.huff_len as usize {
+            break;
+        }
         f_out.write(&[byte])?;
     }
 
     Ok(())
 }
 
-fn write_huff_key(byte_codes: HashMap<u8, u64>, file_path: &str) -> Result<(), Box<dyn Err>> {
-    let mut f = BufWriter::new(File::create(file_path.to_owned() + ".huffk")?);
+fn write_huff_key(byte_codes: HashMap<u8, u64>, f: &mut BufWriter<File>, huff_len: u64) -> Result<(), Box<dyn Err>> {
+    let key_len: u16 = byte_codes.len() as u16 * 9u16 + 10;
+    let key_len_bytes = key_len.to_be_bytes();
+    let huff_len_bytes = huff_len.to_be_bytes();
+
+    f.write(&key_len_bytes)?;
+    f.write(&huff_len_bytes)?;
 
     for (byte, freq) in byte_codes {
         f.write(&[byte])?;
@@ -102,19 +112,36 @@ fn write_huff_key(byte_codes: HashMap<u8, u64>, file_path: &str) -> Result<(), B
     Ok(())
 }
 
-fn read_huff_key(file_path: String) -> Result<HashMap<u8, u64>, Box<dyn Err>> {
+fn read_huff_key(file_path: String) -> Result<HuffKey, Box<dyn Err>> {
     let mut f = BufReader::new(File::open(file_path)?);
     let mut byte_frequency = HashMap::new();
+
+    let mut key_len_bytes: [u8; 2] = [0; 2];
+    f.read_exact(&mut key_len_bytes)?;
+    let key_len = u16::from_be_bytes(key_len_bytes);
+
+    let mut huff_len_bytes: [u8; 8] = [0; 8];
+    f.read_exact(&mut huff_len_bytes)?;
+    let huff_len = u64::from_be_bytes(huff_len_bytes);
+
     let mut bytes: [u8; 9] = [0; 9];
+    let num_byte_codes = (key_len - 10) / 9;
 
     while f.read_exact(&mut bytes).is_ok() {
         let byte = bytes[0];
         let freq_bytes = &bytes[1..9];
         let freq = u64::from_be_bytes(freq_bytes.try_into().unwrap());
         byte_frequency.insert(byte, freq);
+        if byte_frequency.len() as u16 >= num_byte_codes {
+            break;
+        }
     }
 
-    Ok(byte_frequency)
+    Ok(HuffKey {
+        key_len,
+        huff_len,
+        byte_codes: byte_frequency,
+    })
 }
 
 pub struct Config {
@@ -144,6 +171,12 @@ impl Config {
 
         Ok(Config{ cmd, file_path })
     }
+}
+
+struct HuffKey {
+    key_len: u16,
+    huff_len: u64,
+    byte_codes: HashMap<u8, u64>,
 }
 
 struct HuffNode {
