@@ -307,7 +307,10 @@ impl HuffNode {
         }
     }
 
-    /// Builds a Huffman tree from a HashMap that maps a byte to it's frequency.
+    /// Builds a Huffman tree from a HashMap that maps a byte to it's frequency. The tree is built
+    /// by creating a leaf node for each byte and frequency pair, sorting the nodes by frequency,
+    /// and then combining the two nodes with the smallest frequency into a new node. This process
+    /// is repeated until there is only one node left, which is the root node of the tree.
     ///
     /// # Arguments
     ///
