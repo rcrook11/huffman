@@ -1,7 +1,9 @@
-use std::collections::HashMap;
-use std::error::Error as Err;
-use std::fs::File;
-use std::io::{BufReader, Read, BufWriter, Write};
+use std::{
+    collections::HashMap,
+    error::Error as Err,
+    fs::File,
+    io::{BufReader, Read, BufWriter, Write}
+};
 use bit_vec::BitVec;
 
 pub fn run(config: Config) -> Result<(), Box<dyn Err>> {
@@ -10,19 +12,6 @@ pub fn run(config: Config) -> Result<(), Box<dyn Err>> {
         "puff" => puff(&config.file_path),
         _ => Err(Box::from("Invalid command")),
     }
-}
-
-fn count_byte_frequency(file_path: &str) -> Result<HashMap<u8, u64>, Box<dyn Err>> {
-    let f = BufReader::new(File::open(file_path)?);
-
-    let mut byte_frequency = HashMap::new();
-
-    for byte in f.bytes() {
-        let count = byte_frequency.entry(byte?).or_insert(0);
-        *count += 1;
-    }
-
-    Ok(byte_frequency)
 }
 
 pub fn huff(file_path: &str) -> Result<(), Box<dyn Err>> {
@@ -35,13 +24,13 @@ pub fn huff(file_path: &str) -> Result<(), Box<dyn Err>> {
     root.gather_leaves(&mut leaves);
 
     huff_encode(leaves, file_path)?;
-    write_huffk(byte_frequency, file_path)?;
+    write_huff_key(byte_frequency, file_path)?;
 
     Ok(())
 }
 
 pub fn puff(file_path: &str) -> Result<(), Box<dyn Err>> {
-    let byte_codes = read_huffk(file_path.to_owned() + "k")?;
+    let byte_codes = read_huff_key(file_path.to_owned() + "k")?;
 
     let mut root = HuffNode::build_huff_tree(&byte_codes);
     root.update_codes(&0,&0);
@@ -52,14 +41,26 @@ pub fn puff(file_path: &str) -> Result<(), Box<dyn Err>> {
     Ok(())
 }
 
+fn count_byte_frequency(file_path: &str) -> Result<HashMap<u8, u64>, Box<dyn Err>> {
+    let f = BufReader::new(File::open(file_path)?).bytes();
+
+    let mut byte_frequency = HashMap::new();
+
+    for byte in f {
+        let count = byte_frequency.entry(byte?).or_insert(0);
+        *count += 1;
+    }
+
+    Ok(byte_frequency)
+}
+
+
 fn huff_encode(byte_codes: HashMap<u8, Box<HuffCode>>, file_path: &str) -> Result<(), Box<dyn Err>> {
-    let mut f = BufReader::new(File::open(file_path)?).bytes();
+    let f = BufReader::new(File::open(file_path)?).bytes();
     let mut bit_vec = BitVec::new();
 
-    while let Some(b) = f.next() {
-        let byte = b?;
-
-        if let Some(code) = byte_codes.get(&byte) {
+    for byte in f {
+        if let Some(code) = byte_codes.get(&byte?) {
             for i in (0..code.length).rev() {
                 bit_vec.push((code.code & (1 << i)) != 0);
             }
@@ -90,7 +91,7 @@ fn huff_decode(root: Box<HuffNode>, file_path: &str) -> Result<(), Box<dyn Err>>
     Ok(())
 }
 
-fn write_huffk(byte_codes: HashMap<u8, u64>, file_path: &str) -> Result<(), Box<dyn Err>> {
+fn write_huff_key(byte_codes: HashMap<u8, u64>, file_path: &str) -> Result<(), Box<dyn Err>> {
     let mut f = BufWriter::new(File::create(file_path.to_owned() + ".huffk")?);
 
     for (byte, freq) in byte_codes {
@@ -101,7 +102,7 @@ fn write_huffk(byte_codes: HashMap<u8, u64>, file_path: &str) -> Result<(), Box<
     Ok(())
 }
 
-fn read_huffk(file_path: String) -> Result<HashMap<u8, u64>, Box<dyn Err>> {
+fn read_huff_key(file_path: String) -> Result<HashMap<u8, u64>, Box<dyn Err>> {
     let mut f = BufReader::new(File::open(file_path)?);
     let mut byte_frequency = HashMap::new();
     let mut bytes: [u8; 9] = [0; 9];
@@ -173,7 +174,7 @@ impl HuffNode {
         }
     }
 
-    pub fn build_huff_tree(byte_frequency: &HashMap<u8, u64>) -> HuffNode {
+    fn build_huff_tree(byte_frequency: &HashMap<u8, u64>) -> HuffNode {
         let mut nodes = byte_frequency.iter()
             .map(|(byte, frequency)| HuffNode::new(*byte, *frequency, 0))
             .collect::<Vec<HuffNode>>();
@@ -191,11 +192,11 @@ impl HuffNode {
         nodes.remove(0)
     }
 
-    pub fn is_leaf(&self) -> bool {
+    fn is_leaf(&self) -> bool {
         self.left.is_none() && self.right.is_none()
     }
 
-    pub fn combine(left: HuffNode, right: HuffNode) -> HuffNode {
+    fn combine(left: HuffNode, right: HuffNode) -> HuffNode {
         HuffNode {
             code: if &left.code.byte < &right.code.byte {
                 Box::new(HuffCode {
@@ -216,7 +217,7 @@ impl HuffNode {
         }
     }
 
-    pub fn update_codes(&mut self, c: &usize, l: &usize) {
+    fn update_codes(&mut self, c: &usize, l: &usize) {
         if self.is_leaf() {
             self.code.code = *c;
             self.code.length = *l;
@@ -231,7 +232,7 @@ impl HuffNode {
         }
     }
 
-    pub fn gather_leaves(&self, leaves: &mut HashMap<u8, Box<HuffCode>>) {
+    fn gather_leaves(&self, leaves: &mut HashMap<u8, Box<HuffCode>>) {
             if self.is_leaf() {
                 leaves.insert(self.code.byte, Box::new(HuffCode {
                     byte: self.code.byte,
@@ -249,7 +250,7 @@ impl HuffNode {
         }
     }
 
-    pub fn search_tree(&self, bit_vec: &mut BitVec, bits: &mut usize) -> Option<u8> {
+    fn search_tree(&self, bit_vec: &mut BitVec, bits: &mut usize) -> Option<u8> {
         if self.is_leaf() {
             return Some(self.code.byte);
         }
